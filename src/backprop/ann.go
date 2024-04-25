@@ -2,7 +2,7 @@
 Neural Network (nn) using multilayer perceptron architecture
 and the backpropagation algorithm.  This is a web application that uses
 the html/template package to create the HTML.
-The URL is http://127.0.0.1:8080/mlpbackprop.  There are two phases of
+The URL is http://127.0.0.1:8080/mlptspredictor.  There are two phases of
 operation:  the training phase and the testing phase.  Epochs consising of
 a sequence of examples are used to train the nn.  Each example consists
 of an input vector of noisy time samples and a desired predicted output.  The nn
