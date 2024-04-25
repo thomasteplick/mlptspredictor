@@ -104,13 +104,19 @@ type Link struct {
 	wgtDelta float64 // previous weight update used in momentum
 }
 
+// training sample, x is the input vector, d is the desired
+type Sample struct {
+	x float64
+	d float64
+}
+
 // Primary data structure for holding the MLP Backprop state
 type MLP struct {
-	plot            *PlotT   // data to be distributed in the HTML template
-	Endpoints                // embedded struct
-	link            [][]Link // links in the graph
-	node            [][]Node // nodes in the graph
-	samples         []float64
+	plot            *PlotT    // data to be distributed in the HTML template
+	Endpoints                 // embedded struct
+	link            [][]Link  // links in the graph
+	node            [][]Node  // nodes in the graph
+	samples         []Sample  // training samples consisting of desired and input vector
 	mse             []float64 // mean square error in output layer per epoch
 	epochs          int       // number of epochs
 	learningRate    float64   // learning rate parameter
@@ -157,14 +163,14 @@ func (mlp *MLP) propagateForward(samp int) error {
 	i := 1
 	d := len(mlp.node[0])
 	for j := 1; j < d; j++ {
-		mlp.node[0][i].y = mlp.samples[samp]
+		mlp.node[0][i].y = mlp.samples[samp].x
 		i++
 		samp++
 	}
 
 	// Assign the future (predicted) sample which is the desired output.
 	// It is the next sample in the samples list.
-	mlp.desired = mlp.samples[samp]
+	mlp.desired = mlp.samples[samp].d
 
 	// Loop over layers: mlp.hiddenLayers + output layer
 	// input->first hidden, then hidden->hidden,..., then hidden->output
@@ -315,8 +321,9 @@ func (mlp *MLP) createSamples(samples int) error {
 	noiseSigma := math.Sqrt(s / (math.Pow(10.0, float64(mlp.snr)/10.0)))
 	for k := 0; k < samples+mlp.predictionOrder; k++ {
 		// signal consists of sinusoid + Gaussian noise with standard deviation from the SNR
-		mlp.samples[k] = math.Sin(twoPi*float64(mlp.frequency)/float64(mlp.sampleRate)*float64(k)) +
-			noiseSigma*rand.NormFloat64()
+		x := math.Sin(twoPi * float64(mlp.frequency) / float64(mlp.sampleRate) * float64(k))
+		n := noiseSigma * rand.NormFloat64()
+		mlp.samples[k] = Sample{x: x + n, d: x}
 	}
 	return nil
 }
@@ -401,18 +408,19 @@ func newMLP(r *http.Request, plot *PlotT, hiddenLayers int) (*MLP, error) {
 			ymax: -math.MaxFloat64,
 			xmin: 0,
 			xmax: float64(epochs - 1)},
-		samples:         make([]float64, trainingSamples+predictionOrder),
+		samples:         make([]Sample, trainingSamples+predictionOrder),
 		sampleRate:      sampleRate,
 		predictionOrder: predictionOrder,
 		frequency:       frequency,
 		snr:             snr,
 	}
 
-	// construct link that holds the weights and weight deltas and initialize them
+	// construct links that holds the weights and weight deltas and initialize them
 	mlp.link = make([][]Link, hiddenLayers+1)
 
-	// input layer
-	mlp.link[0] = make([]Link, 3*layerDepth)
+	// input layer: (prediction order + 1) nodes * hidden layer depth
+	// bias node accounts for the 1 added to the prediction order
+	mlp.link[0] = make([]Link, (predictionOrder+1)*layerDepth)
 
 	// one output layer node
 	olnodes := 1
@@ -447,11 +455,11 @@ func newMLP(r *http.Request, plot *PlotT, hiddenLayers int) (*MLP, error) {
 		}
 	}
 
-	// construct node, init node[i][0].y to 1.0 (bias)
+	// construct nodes, init node[i][0].y to 1.0 (bias)
 	mlp.node = make([][]Node, hiddenLayers+2)
 
-	// input layer
-	mlp.node[0] = make([]Node, 3)
+	// input layer, prediction order + 1, accounting for the bias node
+	mlp.node[0] = make([]Node, predictionOrder+1)
 	// set first node in the layer (bias) to 1
 	mlp.node[0][0].y = 1.0
 
@@ -480,18 +488,15 @@ func (mlp *MLP) gridFillInterp(op string) error {
 		prevX, prevY float64
 		xscale       float64
 		yscale       float64
-		data         []float64
 		dlen         int
 	)
 	// Which container to use depends on whether training or testing.
 	// training
 	if op == "mse" {
-		data = mlp.mse
 		dlen = mlp.epochs
 		xstep = 1.0
 		// testing, input or output signal
 	} else {
-		data = mlp.samples
 		dlen = mlp.testingSamples
 		xstep = 1.0 / float64(mlp.sampleRate)
 	}
@@ -522,9 +527,13 @@ func (mlp *MLP) gridFillInterp(op string) error {
 	// Continue with the rest of the points in the file
 	for i := 1; i < dlen; i++ {
 
-		// next sample location
+		// next sample
 		x += xstep
-		y = data[i]
+		if op == "mse" {
+			y = mlp.mse[i]
+		} else {
+			y = mlp.samples[i].x
+		}
 
 		// This cell location (row,col) is on the line
 		row := int((mlp.ymax-y)*yscale + .5)
@@ -708,11 +717,11 @@ func (mlp *MLP) runPrediction(signal string) error {
 	if signal == "inputsignal" {
 		// Loop over the training examples and find min/max
 		for _, samp := range mlp.samples[:mlp.testingSamples] {
-			if samp < mlp.ymin {
-				mlp.ymin = samp
+			if samp.x < mlp.ymin {
+				mlp.ymin = samp.x
 			}
-			if samp > mlp.ymax {
-				mlp.ymax = samp
+			if samp.x > mlp.ymax {
+				mlp.ymax = samp.x
 			}
 		}
 		// plot the input signal of the MLP
@@ -765,7 +774,7 @@ func (mlp *MLP) runPrediction(signal string) error {
 				fmt.Printf("Convert to float %s error: %v", outstr, err)
 				return fmt.Errorf("convert to float %s error: %s", outstr, err.Error())
 			}
-			mlp.samples[i] = out
+			mlp.samples[i].x = out
 			i++
 		}
 		if err = scanner.Err(); err != nil {
@@ -777,7 +786,6 @@ func (mlp *MLP) runPrediction(signal string) error {
 
 		mlp.plot.Status = "Prediction completed and output signal of MLP plotted."
 	} else {
-		fmt.Printf("Plotting signal (input or output) not chosen.")
 		return fmt.Errorf("choose input or output signal to be plotted")
 	}
 
@@ -873,7 +881,7 @@ func newTestingMLP(plot *PlotT) (*MLP, error) {
 		frequency:       frequency,
 		testingSamples:  testingSamples,
 		plot:            plot,
-		samples:         make([]float64, testingSamples+predictionOrder),
+		samples:         make([]Sample, testingSamples+predictionOrder),
 		Endpoints: Endpoints{
 			ymin: math.MaxFloat64,
 			ymax: -math.MaxFloat64,
@@ -882,9 +890,7 @@ func newTestingMLP(plot *PlotT) (*MLP, error) {
 	}
 
 	// retrieve the weights
-	rows := 0
 	for scanner.Scan() {
-		rows++
 		line = scanner.Text()
 		weights := strings.Split(line, ",")
 		weights = weights[:len(weights)-1]
@@ -913,8 +919,8 @@ func newTestingMLP(plot *PlotT) (*MLP, error) {
 	// construct node, init node[i][0].y to 1.0 (bias)
 	mlp.node = make([][]Node, mlp.hiddenLayers+2)
 
-	// input layer
-	mlp.node[0] = make([]Node, 3)
+	// input layer, prediction order + 1, accounting for the bias node
+	mlp.node[0] = make([]Node, predictionOrder+1)
 	// set first node in the layer (bias) to 1
 	mlp.node[0][0].y = 1.0
 
