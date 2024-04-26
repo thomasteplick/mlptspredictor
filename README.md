@@ -73,6 +73,19 @@ phase and the MLP Training Parameters must be entered again.
 
 ![image](https://github.com/thomasteplick/mlptspredictor/assets/117768679/f61f810b-6c22-415f-991c-3552296c7fd1)
 
+<h3>MLP Training, Learning Curve, Prediction Order = 50, SNR=10dB, 1 Hidden Layer, Layer Depth=20</h3>
+
+![image](https://github.com/thomasteplick/mlptspredictor/assets/117768679/0691f52b-cb19-4ac5-bd11-7d3a70c89aea)
+
+<h3>MLP Testing, Input Signal versus Time</h3>
+
+![image](https://github.com/thomasteplick/mlptspredictor/assets/117768679/6eeb29c4-649e-4bc9-aba2-eeed538754d4)
+
+<h3>MLP Testing, Output Signal versus Time</h3>
+
+![image](https://github.com/thomasteplick/mlptspredictor/assets/117768679/33df78a4-3db2-41d2-ba6c-ffac063538c7)
+
+
 
 
  
