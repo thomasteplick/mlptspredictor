@@ -48,3 +48,18 @@ or over training with more examples than necessary may be detrimental to the MLP
 network, the more training examples will be needed to reduce the MSE to zero.  Clicking the <i>Train</i> link starts a new training
 phase and the MLP Training Parameters must be entered again.
 </p>
+
+<h3>MLP Training, Learning Curve, Prediction Order = 50, SNR = 0dB, 5Hz, 3 Hidden Layers, Layer Depth = 20</h3>
+
+![image](https://github.com/thomasteplick/mlptspredictor/assets/117768679/eec6a60b-5a29-499a-a691-73d9e8820601)
+
+ <h3>MLP Testing, Input Signal versus Time</h3>
+
+![image](https://github.com/thomasteplick/mlptspredictor/assets/117768679/0d48b265-d958-467b-8495-1c0e12b7ec7b)
+
+<h3>MLP Testing, Output Signal versus Time</h3>
+
+![image](https://github.com/thomasteplick/mlptspredictor/assets/117768679/2a917bc3-3f8b-4ddc-9aeb-68d523106cdf)
+
+
+ 
